@@ -53,8 +53,8 @@ export function trueBreakEven(
   let cumulativeSavings = 0;
 
   for (let m = 0; m < limit; m++) {
-    const baselineInterest = baselineSchedule[m].interestPaid;
-    const refiInterest = refiSchedule[m].interestPaid;
+    const baselineInterest = baselineSchedule[m]!.interestPaid;
+    const refiInterest = refiSchedule[m]!.interestPaid;
     cumulativeSavings += baselineInterest - refiInterest;
 
     if (cumulativeSavings >= closingCosts) {

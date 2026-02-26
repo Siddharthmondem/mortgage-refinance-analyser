@@ -88,7 +88,7 @@ export function totalInterestWithinMonths(
   const limit = Math.min(k, schedule.length);
   let total = 0;
   for (let i = 0; i < limit; i++) {
-    total += schedule[i].interestPaid;
+    total += schedule[i]!.interestPaid;
   }
   return round2(total);
 }
@@ -104,9 +104,9 @@ export function remainingBalanceAtMonth(
   schedule: AmortizationRow[],
   k: number
 ): number {
-  if (k <= 0) return schedule.length > 0 ? round2(schedule[0].remainingBalance + schedule[0].principalPaid) : 0;
+  if (k <= 0) return schedule.length > 0 ? round2(schedule[0]!.remainingBalance + schedule[0]!.principalPaid) : 0;
   if (k >= schedule.length) return 0;
-  return schedule[k - 1].remainingBalance;
+  return schedule[k - 1]!.remainingBalance;
 }
 
 /**

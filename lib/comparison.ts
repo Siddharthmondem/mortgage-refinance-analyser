@@ -69,7 +69,7 @@ export function selectWinner(
 ): ScenarioResult {
   if (ranked.length === 0) return baseline;
 
-  const best = ranked[0];
+  const best = ranked[0]!;
 
   // If baseline is the cheapest (or tied), stay current wins
   if (best.id === "stay_current") return baseline;
