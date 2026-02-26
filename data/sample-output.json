@@ -1,0 +1,95 @@
+{
+  "input": {
+    "remainingBalance": 320000,
+    "currentAnnualRate": 0.0695,
+    "yearsRemaining": 23,
+    "closingCosts": 6400,
+    "refiRateSameTerm": 0.0575,
+    "refiRate15yr": 0.0525,
+    "refiRate30yr": 0.06
+  },
+  "horizonMonths": 276,
+  "scenarios": [
+    {
+      "id": "stay_current",
+      "label": "Stay Current",
+      "rate": 0.0695,
+      "termMonths": 276,
+      "monthlyPayment": 2325.78,
+      "monthlyDelta": 0,
+      "interestWithinHorizon": 321914.18,
+      "fees": 0,
+      "remainingBalanceAtHorizon": 0,
+      "totalCostWithinHorizon": 321914.18,
+      "savingsVsBaseline": 0,
+      "simpleBreakEvenMonths": null,
+      "trueBreakEvenMonths": null,
+      "isBestLongTerm": false,
+      "warnings": []
+    },
+    {
+      "id": "refi_same_term",
+      "label": "Refi (Same Term)",
+      "rate": 0.0575,
+      "termMonths": 276,
+      "monthlyPayment": 2092.75,
+      "monthlyDelta": -233.03,
+      "interestWithinHorizon": 257598.06,
+      "fees": 6400,
+      "remainingBalanceAtHorizon": 0,
+      "totalCostWithinHorizon": 263998.06,
+      "savingsVsBaseline": 57916.12,
+      "simpleBreakEvenMonths": 28,
+      "trueBreakEvenMonths": 21,
+      "isBestLongTerm": false,
+      "warnings": []
+    },
+    {
+      "id": "refi_15yr",
+      "label": "Refi (15-Year)",
+      "rate": 0.0525,
+      "termMonths": 180,
+      "monthlyPayment": 2572.41,
+      "monthlyDelta": 246.63,
+      "interestWithinHorizon": 143033.51,
+      "fees": 6400,
+      "remainingBalanceAtHorizon": 0,
+      "totalCostWithinHorizon": 149433.51,
+      "savingsVsBaseline": 172480.67,
+      "simpleBreakEvenMonths": null,
+      "trueBreakEvenMonths": 14,
+      "isBestLongTerm": true,
+      "warnings": [
+        "Payment Increase Warning: +$246.63/mo higher than your current payment."
+      ]
+    },
+    {
+      "id": "refi_30yr",
+      "label": "Refi (30-Year Reset)",
+      "rate": 0.06,
+      "termMonths": 360,
+      "monthlyPayment": 1918.56,
+      "monthlyDelta": -407.22,
+      "interestWithinHorizon": 340855.01,
+      "fees": 6400,
+      "remainingBalanceAtHorizon": 131332.45,
+      "totalCostWithinHorizon": 347255.01,
+      "savingsVsBaseline": -25340.83,
+      "simpleBreakEvenMonths": 16,
+      "trueBreakEvenMonths": 27,
+      "isBestLongTerm": false,
+      "warnings": [
+        "Term Reset Trap: You would still owe $131,332.45 when your original loan would have been paid off."
+      ]
+    }
+  ],
+  "verdict": {
+    "color": "green",
+    "label": "Refinance Looks Strong",
+    "message": "You'd recoup closing costs in 14 months and pay $246.63/mo more. Over the comparison horizon, that's $172,480.67 less in total cost. Best option: Refi (15-Year).",
+    "breakEvenMonths": 14,
+    "monthlyDelta": 246.63,
+    "netSavings": 172480.67,
+    "bestScenarioId": "refi_15yr"
+  }
+}

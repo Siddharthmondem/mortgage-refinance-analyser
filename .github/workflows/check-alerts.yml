@@ -1,0 +1,42 @@
+name: Check Rate Alerts
+
+on:
+  schedule:
+    # Every Thursday at 10pm UTC — 2 hours after fetch-rates completes
+    - cron: "0 22 * * 4"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to commit notified_at updates
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Pull latest commit so we get the rates.json just updated by fetch-rates
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check alerts and send emails
+        run: npx tsx scripts/check_alerts.ts
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+
+      - name: Commit updated alert records
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/rate-alerts.json
+          git diff --staged --quiet && echo "No alert changes." || \
+            git commit -m "chore: mark rate alerts as notified [skip ci]" && git push

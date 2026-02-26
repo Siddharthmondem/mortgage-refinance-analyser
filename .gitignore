@@ -1,0 +1,26 @@
+# Next.js
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# User PII — never commit rate alert emails
+data/rate-alerts.json
+
+# Build artifacts
+*.tsbuildinfo
+next-env.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
