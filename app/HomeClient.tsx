@@ -7,8 +7,11 @@ import KeyNumbers from "@/components/KeyNumbers";
 import ScenarioTable from "@/components/ScenarioTable";
 import AssumptionsDisclosure from "@/components/AssumptionsDisclosure";
 import RateAlertOptIn from "@/components/RateAlertOptIn";
+import LenderRateCards from "@/components/LenderRateCards";
+import AnalysisPopup from "@/components/AnalysisPopup";
 import { runEngine } from "@/lib/comparison";
-import type { EngineInput, EngineOutput, RateData } from "@/lib/types";
+import { scoreLenderRate, sortScoredRates } from "@/lib/lender-rates";
+import type { EngineInput, EngineOutput, RateData, LenderRate, ScoredLenderRate } from "@/lib/types";
 
 import ratesJson from "@/data/rates.json";
 const RATES = ratesJson as RateData;
@@ -91,6 +94,10 @@ function computeTriggerRate(form: FormValues): number {
 export default function HomeClient() {
   const [result, setResult] = useState<EngineOutput | null>(null);
   const [formValues, setFormValues] = useState<FormValues | null>(null);
+  const [scoredLenders, setScoredLenders] = useState<ScoredLenderRate[]>([]);
+  const [lendersLoading, setLendersLoading] = useState(false);
+  const [lendersError, setLendersError] = useState(false);
+  const [selectedLender, setSelectedLender] = useState<ScoredLenderRate | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const formRef    = useRef<HTMLDivElement>(null);
 
@@ -101,6 +108,52 @@ export default function HomeClient() {
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
+
+    // Fetch lender rates in parallel
+    fetchAndScoreLenders(values);
+  }
+
+  async function fetchAndScoreLenders(values: FormValues) {
+    setLendersLoading(true);
+    setLendersError(false);
+    setScoredLenders([]);
+
+    const balance = parseFloat(values.remainingBalance.replace(/[$,]/g, ""));
+    const currentRate = parseFloat(values.currentAnnualRate.replace(/%/g, "")) / 100;
+    const years = parseFloat(values.yearsRemaining);
+    const costs = parseFloat(values.closingCosts.replace(/[$,]/g, ""));
+
+    try {
+      const res = await fetch("/api/lender-rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          loanAmount: balance,
+          creditTier: values.creditTier,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(`Lender rates API error: ${res.status} ${res.statusText}`);
+        setLendersError(true);
+        setLendersLoading(false);
+        return;
+      }
+
+      const data = await res.json() as { rates: LenderRate[] };
+
+      // Score each lender rate using the engine
+      const scored = data.rates.map((lender) =>
+        scoreLenderRate(lender, balance, currentRate, years, costs)
+      );
+
+      setScoredLenders(sortScoredRates(scored));
+    } catch (err) {
+      console.error("Failed to fetch/score lender rates:", err);
+      setLendersError(true);
+    } finally {
+      setLendersLoading(false);
+    }
   }
 
   function handleRecalculate() {
@@ -209,6 +262,15 @@ export default function HomeClient() {
                 {/* Scenario Table */}
                 <ScenarioTable scenarios={result.scenarios} horizonYears={horizonYears} />
 
+                {/* Lender Rate Cards */}
+                <LenderRateCards
+                  rates={scoredLenders}
+                  loading={lendersLoading}
+                  error={lendersError}
+                  onSelect={setSelectedLender}
+                  onRetry={() => formValues && fetchAndScoreLenders(formValues)}
+                />
+
                 {/* Recalculate */}
                 <div className="text-center pt-2">
                   <button
@@ -275,6 +337,14 @@ export default function HomeClient() {
           </a>
         </div>
       </footer>
+
+      {/* ── Lender Analysis Popup ── */}
+      {selectedLender && (
+        <AnalysisPopup
+          lender={selectedLender}
+          onClose={() => setSelectedLender(null)}
+        />
+      )}
     </div>
   );
 }

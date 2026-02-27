@@ -94,3 +94,25 @@ export interface RateData {
     fixed_15yr: number;
   };
 }
+
+// ---- Lender Rates (Phase 2) ----
+
+export interface LenderRate {
+  id: string;
+  lenderName: string;
+  rate: number; // decimal, e.g. 0.0625 for 6.25%
+  apr: number; // decimal
+  monthlyPayment: number;
+  fees: number; // total closing costs in dollars
+  points: number; // discount points (0, 0.5, 1, etc.)
+  loanProgram: string; // "30yr Fixed", "15yr Fixed"
+  lastUpdated: string; // ISO 8601
+}
+
+export interface ScoredLenderRate extends LenderRate {
+  verdict: Verdict;
+  monthlySavings: number; // positive = user saves
+  breakEvenMonths: number | null;
+  totalSavings: number;
+  engineOutput: EngineOutput;
+}
