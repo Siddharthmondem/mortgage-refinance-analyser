@@ -110,7 +110,7 @@ export default function AnalysisPopup({ lender, onClose }: Props) {
         {/* Content */}
         <div className="px-6 py-5 space-y-4">
           {/* Verdict */}
-          <VerdictBox verdict={verdict} />
+          <VerdictBox verdict={verdict} showRecommendation />
 
           {/* Key Numbers */}
           <KeyNumbers verdict={verdict} horizonYears={horizonYears} />

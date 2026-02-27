@@ -1,9 +1,18 @@
 "use client";
 
-import type { Verdict } from "@/lib/types";
+import type { Verdict, ScenarioId } from "@/lib/types";
+
+const SCENARIO_LABELS: Record<ScenarioId, string> = {
+  stay_current: "",
+  refi_same_term: "Same-Term Refinance",
+  refi_15yr: "15-Year Refinance",
+  refi_30yr: "30-Year Refinance",
+};
 
 interface Props {
   verdict: Verdict;
+  /** When true, appends the recommended scenario name to the verdict label */
+  showRecommendation?: boolean;
 }
 
 const CONFIG = {
@@ -33,8 +42,10 @@ const CONFIG = {
   },
 } as const;
 
-export default function VerdictBox({ verdict }: Props) {
+export default function VerdictBox({ verdict, showRecommendation }: Props) {
   const cfg = CONFIG[verdict.color];
+  const scenarioLabel = SCENARIO_LABELS[verdict.bestScenarioId];
+  const showScenario = showRecommendation && scenarioLabel;
 
   return (
     <div
@@ -43,13 +54,20 @@ export default function VerdictBox({ verdict }: Props) {
       aria-label="Refinance verdict"
     >
       {/* Header */}
-      <div className="flex items-center gap-3 mb-3">
-        <span className="text-2xl" role="img" aria-label={cfg.iconLabel}>
+      <div className="flex items-start gap-3 mb-3">
+        <span className="text-2xl flex-shrink-0" role="img" aria-label={cfg.iconLabel}>
           {cfg.icon}
         </span>
-        <h2 className={`text-xl font-bold ${cfg.labelColor}`}>
-          {verdict.label}
-        </h2>
+        <div>
+          <h2 className={`text-xl font-bold ${cfg.labelColor}`}>
+            {verdict.label}
+          </h2>
+          {showScenario && (
+            <p className={`text-sm font-semibold ${cfg.labelColor} opacity-80 mt-0.5`}>
+              Recommended: {scenarioLabel}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Message */}
