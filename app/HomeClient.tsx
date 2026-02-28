@@ -283,7 +283,7 @@ export default function HomeClient() {
 
       {/* ── Header ── */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div>
             <span className="font-bold text-gray-900 text-base">Refinance Clarity Engine</span>
             <span className="hidden sm:inline text-gray-400 text-sm ml-2">
@@ -299,7 +299,7 @@ export default function HomeClient() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8">
 
         {/* ── Hero ── */}
         {!result && (
@@ -455,7 +455,7 @@ export default function HomeClient() {
 
       {/* ── Footer ── */}
       <footer className="border-t border-gray-200 bg-white mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
           <span>Refinance Clarity Engine — educational tool only, not financial advice</span>
           <a href="/methodology" className="hover:text-gray-600 underline underline-offset-2">
             Methodology
