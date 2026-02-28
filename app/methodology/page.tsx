@@ -58,7 +58,11 @@ Where:
 
           {/* 2. Scenarios */}
           <Section title="2. What We Compare">
-            <p>We generate up to 4 scenarios and compare them over your <em>remaining horizon</em> — the years left on your current loan. This ensures apples-to-apples comparisons.</p>
+            <p>
+              We generate up to 4 scenarios and compare them over your selected{" "}
+              <strong>comparison horizon</strong> — see section 3. This ensures
+              apples-to-apples comparisons.
+            </p>
             <div className="overflow-x-auto mt-4">
               <table className="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
                 <thead className="bg-gray-50">
@@ -78,27 +82,62 @@ Where:
             </div>
           </Section>
 
-          {/* 3. Total Cost */}
-          <Section title="3. Total Cost Over Horizon">
-            <p>For each scenario, we compute:</p>
-            <Formula>
-              {`Total Cost = Interest Paid Within Horizon + Closing Costs
-
-Interest Within Horizon = Total Payments − Principal Repaid
-  = (Monthly Payment × k) − (Starting Balance − Balance at month k)
-
-where k = min(remaining months, loan term months)`}
-            </Formula>
+          {/* 3. Horizon */}
+          <Section title="3. Comparison Horizon">
             <p>
-              For the <strong>30-year reset</strong>, the loan extends past your original
-              payoff date. We compute interest only for your original remaining years — but we
-              also show the <strong>remaining balance at horizon end</strong> separately,
-              because that money is still owed.
+              The <strong>horizon</strong> is the time window over which we compare all
+              scenarios. By default it equals your remaining loan term — the most conservative,
+              long-run view.
+            </p>
+            <p>
+              You can shorten it using the horizon selector (3 / 5 / 7 / 10 / Full years).
+              This answers: <em>&ldquo;What&apos;s the best option if I plan to sell or move in X years?&rdquo;</em>
+            </p>
+            <p>
+              Every metric responds to your horizon selection:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+              <li><strong>Net Cost at Horizon</strong> — recomputed over the selected window</li>
+              <li><strong>Break-even</strong> — must occur within the horizon to count</li>
+              <li><strong>Annual Return (IRR)</strong> — computed over the selected period</li>
+              <li><strong>Verdict color</strong> — thresholds scale with horizon length</li>
+            </ul>
+            <p>
+              A 30-year reset that looks expensive at full term may look attractive at 5 years —
+              and vice versa. The horizon selector makes this visible.
             </p>
           </Section>
 
-          {/* 4. Remaining Balance (30yr trap) */}
-          <Section title='4. Remaining Balance at Horizon End ("Term Reset Trap")'>
+          {/* 4. Net Cost at Horizon */}
+          <Section title="4. Net Cost at Horizon">
+            <p>
+              For each scenario we compute a single number that captures the true economic
+              cost over your horizon — including what you&apos;ll still owe at the end:
+            </p>
+            <Formula>
+              {`k = min(loan term months, horizon months)
+
+paymentsWithinHorizon    = monthlyPayment × k
+cashOutflowWithinHorizon = closingCosts + paymentsWithinHorizon
+netCostAtHorizon         = cashOutflowWithinHorizon + remainingBalanceAtHorizon
+
+Where remainingBalanceAtHorizon is what you still owe at month k
+(0 if the loan is fully paid off before the horizon).`}
+            </Formula>
+            <p>
+              <strong>Scenarios are ranked by netCostAtHorizon — lowest wins.</strong>{" "}
+              This correctly penalises the 30-year reset for the balance still owed at
+              horizon end, even if its monthly payment is lower.
+            </p>
+            <p>
+              <code className="bg-gray-100 px-1 rounded text-xs">cashOutflowWithinHorizon</code>{" "}
+              (cash paid, ignoring balance) is shown as a secondary metric in the table for
+              reference — useful if you plan to sell and pocket the equity difference.
+            </p>
+          </Section>
+
+          {/* 5. Remaining Balance (30yr trap) */}
+          <Section title='5. Remaining Balance at Horizon End ("Term Reset Trap")'>
             <p>
               When a 30-year refi extends past your original payoff date, we use the
               closed-form balance formula to compute exactly what you still owe:
@@ -109,60 +148,161 @@ where k = min(remaining months, loan term months)`}
             <p>
               This is the money you&apos;ll still owe at the point your old loan
               would have been paid off. A 30-year refi may appear cheaper on a
-              month-by-month basis while actually costing you significantly more in total.
-              We flag this explicitly.
+              month-by-month basis while actually costing significantly more in total.
+              We flag this as a &ldquo;Term Reset Trap&rdquo; at full horizon, or a
+              &ldquo;Term Reset Tradeoff&rdquo; at shorter horizons where the balance
+              difference is smaller.
             </p>
           </Section>
 
-          {/* 5. Break-Even */}
-          <Section title="5. Break-Even">
-            <p>We compute the true break-even month-by-month:</p>
+          {/* 6. Break-Even */}
+          <Section title="6. Break-Even">
+            <p>We compute two break-even values for each scenario:</p>
+            <p>
+              <strong>Interest break-even</strong> (primary, shown in the table) — the first
+              month where cumulative <em>interest savings</em> cover closing costs:
+            </p>
             <Formula>
               {`For each month m from 1 to horizon:
-  monthly_benefit[m] = baseline_interest[m] − refi_interest[m]
-  cumulative_savings[m] = Σ monthly_benefit[1..m]
+  monthly_interest_benefit[m] = baseline_interest[m] − refi_interest[m]
+  cumulative_interest_savings[m] = Σ monthly_interest_benefit[1..m]
 
-  Break-even = first m where cumulative_savings[m] ≥ closing_costs`}
+  Interest break-even = first m where cumulative_interest_savings[m] ≥ closing_costs`}
             </Formula>
             <p>
-              This method correctly handles scenarios where your monthly payment
-              <em> increases</em> (e.g., a 15-year refi) but interest savings are still large
-              enough to recoup closing costs quickly. A simple payment-delta formula
-              would incorrectly show &quot;no break-even&quot; in this case.
+              This correctly handles scenarios where the monthly payment{" "}
+              <em>increases</em> (e.g., a 15-year refi) — the interest savings can still
+              be large enough to recoup closing costs quickly, even though cashflow is
+              negative each month.
+            </p>
+            <p>
+              <strong>Cashflow break-even</strong> (shown in tooltip) — the simpler payback
+              period based on the monthly payment <em>delta</em>:
+            </p>
+            <Formula>
+              {`Cashflow break-even = closing_costs ÷ (baseline_payment − refi_payment)
+
+null if refi_payment ≥ baseline_payment (payment increased — never recoups via cashflow)`}
+            </Formula>
+            <p>
+              Both values are shown side-by-side in the break-even tooltip. The interest
+              break-even is preferred because it accounts for the full cost of debt, not
+              just cash out of pocket each month.
             </p>
           </Section>
 
-          {/* 6. Verdict */}
-          <Section title="6. Verdict Logic">
-            <p>We select the scenario with the lowest total cost over your horizon as the winner, then apply these thresholds:</p>
-            <div className="overflow-x-auto mt-4">
+          {/* 7. IRR */}
+          <Section title="7. Annual Return on Closing Costs (IRR)">
+            <p>
+              The IRR frames closing costs as an <em>investment</em> and computes the
+              annualised rate of return you earn over your horizon — making it directly
+              comparable to other uses of that cash.
+            </p>
+            <p>
+              Cash flow model (two-period annuity):
+            </p>
+            <Formula>
+              {`CF[0]      = −closingCosts                     (upfront outlay)
+CF[1..k]   = baselinePayment − refiPayment      (monthly delta during refi period)
+CF[k+1..N] = baselinePayment                    (baseline still paying after refi pays off)
+CF[N]     += balanceSavedAtHorizon               (terminal equity benefit)
+
+Where k = min(refiTermMonths, horizonMonths), N = horizonMonths
+
+NPV(r) = −fees
+       + (basePmt − refiPmt) × annuity(r, k)
+       + basePmt × (annuity(r, N) − annuity(r, k))
+       + balanceSaved / (1+r)^N
+
+annuity(r, n) = (1 − (1+r)^−n) / r`}
+            </Formula>
+            <p>
+              The monthly IRR is the root of NPV(r) = 0, found by bisection (100 iterations).
+              The annualised IRR is then <code className="bg-gray-100 px-1 rounded text-xs">(1 + monthly_r)^12 − 1</code>.
+            </p>
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Case</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Display</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  <Row2 a="Closing costs = $0" b="∞ (infinite return — no investment made)" />
+                  <Row2 a="No mathematical solution in range" b="N/A" />
+                  <Row2 a="Stay current" b="— (no investment)" />
+                  <Row2 a="Negative IRR" b="−X.X% shown in amber (bad deal)" />
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2">
+              The two-period model is critical for 15-year scenarios: the monthly payment is
+              higher than baseline, but after month 180 the refi is paid off while the baseline
+              still charges the full payment. Treating that post-payoff period as pure savings
+              (rather than ignoring it) gives the correct, higher IRR.
+            </p>
+          </Section>
+
+          {/* 8. Verdict */}
+          <Section title="8. Verdict Logic">
+            <p>
+              We select the scenario with the lowest <strong>Net Cost at Horizon</strong> as
+              the winner, then compute:
+            </p>
+            <Formula>
+              {`ratio = interestBreakEvenMonths / horizonMonths
+netSavings = baseline.netCostAtHorizon − winner.netCostAtHorizon
+horizonYears = horizonMonths / 12`}
+            </Formula>
+            <p>Thresholds scale with the selected horizon:</p>
+            <div className="overflow-x-auto mt-2">
               <table className="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Verdict</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Conditions</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Example at 5yr / 10yr</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   <tr className="bg-green-50">
                     <td className="px-4 py-3 font-semibold text-green-800">✅ Refinance Looks Strong</td>
-                    <td className="px-4 py-3 text-gray-700 text-xs">Break-even &lt; 24 months AND net savings &gt; $2,000</td>
+                    <td className="px-4 py-3 text-gray-700 text-xs">
+                      ratio &lt; 0.33<br />AND netSavings &gt; $200 × horizonYears
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      BE &lt; 20mo, save &gt;$1k<br />BE &lt; 40mo, save &gt;$2k
+                    </td>
                   </tr>
                   <tr className="bg-amber-50">
                     <td className="px-4 py-3 font-semibold text-amber-800">⚠️ Worth a Closer Look</td>
-                    <td className="px-4 py-3 text-gray-700 text-xs">Break-even 24–48 months OR net savings $500–$2,000</td>
+                    <td className="px-4 py-3 text-gray-700 text-xs">
+                      ratio &lt; 0.67<br />AND netSavings &gt; $50 × horizonYears
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      BE &lt; 40mo, save &gt;$250<br />BE &lt; 80mo, save &gt;$500
+                    </td>
                   </tr>
                   <tr className="bg-red-50">
                     <td className="px-4 py-3 font-semibold text-red-800">❌ Stay With Your Current Loan</td>
-                    <td className="px-4 py-3 text-gray-700 text-xs">Break-even &gt; 48 months OR net savings &lt; $500 OR negative savings</td>
+                    <td className="px-4 py-3 text-gray-700 text-xs">
+                      Break-even after horizon, or<br />negative savings, or thresholds not met
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">—</td>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <p className="mt-3 text-sm text-gray-500">
+              Using ratio-based thresholds (rather than fixed months) means the verdict
+              correctly tightens at short horizons — a 20-month break-even is strong for a
+              10-year horizon but marginal for a 3-year one.
+            </p>
           </Section>
 
-          {/* 7. Rates */}
-          <Section title="7. Where Rates Come From">
+          {/* 9. Rates */}
+          <Section title="9. Where Rates Come From">
             <p>
               We use the{" "}
               <strong>Freddie Mac Primary Mortgage Market Survey (PMMS)</strong> — the
@@ -181,8 +321,8 @@ where k = min(remaining months, loan term months)`}
             </p>
           </Section>
 
-          {/* 8. Credit Tier */}
-          <Section title="8. Credit Tier Adjustments">
+          {/* 10. Credit Tier */}
+          <Section title="10. Credit Tier Adjustments">
             <p>
               National average rates assume excellent credit. We apply estimated spreads
               based on typical lender pricing tiers:
@@ -211,8 +351,8 @@ where k = min(remaining months, loan term months)`}
             </p>
           </Section>
 
-          {/* 9. What we don't include */}
-          <Section title="9. What We Don't Include">
+          {/* 11. What we don't include */}
+          <Section title="11. What We Don't Include">
             <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
               <li>Property taxes</li>
               <li>Homeowner&apos;s insurance</li>
@@ -230,8 +370,8 @@ where k = min(remaining months, loan term months)`}
             </p>
           </Section>
 
-          {/* 10. Philosophy */}
-          <Section title="10. Our Philosophy">
+          {/* 12. Philosophy */}
+          <Section title="12. Our Philosophy">
             <blockquote className="border-l-4 border-blue-300 pl-4 text-gray-700 italic">
               We&apos;d rather tell you not to refinance than push you into a bad deal.
             </blockquote>
@@ -275,6 +415,15 @@ function Formula({ children }: { children: string }) {
     <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-800 overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap">
       {children}
     </pre>
+  );
+}
+
+function Row2({ a, b }: { a: string; b: string }) {
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-4 py-3 font-medium text-gray-800">{a}</td>
+      <td className="px-4 py-3 text-gray-600 text-xs">{b}</td>
+    </tr>
   );
 }
 
