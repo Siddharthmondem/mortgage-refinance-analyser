@@ -46,6 +46,8 @@ function Card({ value, label, sub, accent, warn }: CardProps) {
 }
 
 export default function KeyNumbers({ verdict, horizonYears }: Props) {
+  const horizonMonths = horizonYears * 12;
+
   const breakEvenDisplay =
     verdict.breakEvenMonths === null
       ? "N/A"
@@ -69,6 +71,13 @@ export default function KeyNumbers({ verdict, horizonYears }: Props) {
       ? `$${fmt(savingsAbs)} more`
       : "No change";
 
+  // Accent thresholds scale with horizon (mirrors determineColor in comparison.ts)
+  const greenSavingsThreshold = 200 * horizonYears;
+  const breakEvenRatio =
+    verdict.breakEvenMonths !== null && horizonMonths > 0
+      ? verdict.breakEvenMonths / horizonMonths
+      : null;
+
   return (
     <dl className="grid grid-cols-3 gap-2 sm:gap-3" aria-label="Key refinance numbers">
       <Card
@@ -76,8 +85,8 @@ export default function KeyNumbers({ verdict, horizonYears }: Props) {
         label="break-even"
         sub="to recoup costs"
         accent={
-          verdict.breakEvenMonths !== null &&
-          verdict.breakEvenMonths < 24 &&
+          breakEvenRatio !== null &&
+          breakEvenRatio < 0.33 &&
           verdict.color === "green"
         }
       />
@@ -91,7 +100,7 @@ export default function KeyNumbers({ verdict, horizonYears }: Props) {
         value={savingsDisplay}
         label={`over ${horizonYears} years`}
         sub="total cost difference"
-        accent={verdict.netSavings > 2000}
+        accent={verdict.netSavings > greenSavingsThreshold}
         warn={verdict.netSavings < 0}
       />
     </dl>

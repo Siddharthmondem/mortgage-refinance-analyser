@@ -35,7 +35,8 @@ export function generateScenarios(input: EngineInput): ScenarioResult[] {
     refiRate30yr: r30,
   } = input;
 
-  const N = Math.round(Y * 12); // horizon months
+  const N        = input.horizonOverrideMonths ?? Math.round(Y * 12); // comparison horizon
+  const fullTerm = Math.round(Y * 12);                                 // actual remaining loan term
 
   // ---- Scenario 0: Stay Current (Baseline) ----
   const baseline = buildScenario({
@@ -43,7 +44,7 @@ export function generateScenarios(input: EngineInput): ScenarioResult[] {
     label: "Stay Current",
     principal: B,
     rate: rc,
-    termMonths: N,
+    termMonths: fullTerm, // full remaining term, not the horizon
     horizonMonths: N,
     fees: 0,
     baselinePayment: 0, // will be set after
@@ -52,13 +53,13 @@ export function generateScenarios(input: EngineInput): ScenarioResult[] {
 
   // Baseline reference values
   const basePayment = baseline.monthlyPayment;
-  const baseSchedule = amortizationSchedule(B, rc, N);
+  const baseSchedule = amortizationSchedule(B, rc, fullTerm);
 
   // Finalize baseline deltas (always 0 vs itself)
   baseline.monthlyDelta = 0;
-  baseline.savingsVsBaseline = 0;
-  baseline.simpleBreakEvenMonths = null;
-  baseline.trueBreakEvenMonths = null;
+  baseline.netSavingsAtHorizon = 0;
+  baseline.cashflowBreakEvenMonths = null;
+  baseline.interestBreakEvenMonths = null;
 
   const scenarios: ScenarioResult[] = [baseline];
 
@@ -69,7 +70,7 @@ export function generateScenarios(input: EngineInput): ScenarioResult[] {
       label: "Refi (Same Term)",
       principal: B,
       rate: rSame,
-      termMonths: N,
+      termMonths: fullTerm, // same remaining term as baseline
       horizonMonths: N,
       fees: F,
       baselinePayment: basePayment,
@@ -108,11 +109,19 @@ export function generateScenarios(input: EngineInput): ScenarioResult[] {
       baselineSchedule: baseSchedule,
     });
 
-    // Add term reset trap warning
+    // Add term reset warning — "trap" for full-term horizon, "tradeoff" for short-horizon
     if (sc30.remainingBalanceAtHorizon > 0) {
-      sc30.warnings.push(
-        `Term Reset Trap: You would still owe $${formatNumber(sc30.remainingBalanceAtHorizon)} when your original loan would have been paid off.`
-      );
+      const isFullTerm = !input.horizonOverrideMonths;
+      if (isFullTerm) {
+        sc30.warnings.push(
+          `Term Reset Trap: You would still owe $${formatNumber(sc30.remainingBalanceAtHorizon)} when your original loan would have been paid off.`
+        );
+      } else {
+        const horizonYrs = Math.round((input.horizonOverrideMonths ?? N) / 12);
+        sc30.warnings.push(
+          `Term Reset Tradeoff: At your ${horizonYrs}-year horizon, you'd exit with $${formatNumber(sc30.remainingBalanceAtHorizon)} still owed. The 30-year extends your payoff date but lowers your monthly payment.`
+        );
+      }
     }
 
     scenarios.push(sc30);
@@ -149,24 +158,28 @@ function buildScenario(params: BuildParams): ScenarioResult {
   const remBalance =
     termMonths <= horizonMonths ? 0 : remainingBalanceAtMonth(schedule, horizonMonths);
 
-  const totalCost = round2(interestInHorizon + fees);
+  // New cost fields
+  const paymentsWithinHorizon = round2(pmt * k);
+  const cashOutflowWithinHorizon = round2(fees + paymentsWithinHorizon);
+  const netCostAtHorizon = round2(cashOutflowWithinHorizon + remBalance);
 
   // Deltas vs baseline
   const monthlyDelta = round2(pmt - params.baselinePayment);
 
-  // Savings = baseline total cost - this scenario total cost
-  // Baseline total cost is computed separately; for now set to 0 and
-  // recalculate in generateScenarios after baseline is built.
-  // For baseline itself, savings = 0.
-  const baselineTotalCost =
+  // Savings = baseline netCost - this netCost
+  // Since netCostAtHorizon = fees + interest + B (B = original balance, constant),
+  // this equals (baseline interest) - (fees + this interest) — same as before.
+  const baselineInterest =
     params.baselineSchedule.length > 0
       ? round2(totalInterestWithinMonths(params.baselineSchedule, horizonMonths))
       : 0;
-  const savings = round2(baselineTotalCost - totalCost);
+  const baselineNetCost = round2(baselineInterest); // baseline fees = 0
+  const thisLegacyCost = round2(interestInHorizon + fees);
+  const netSavingsAtHorizon = round2(baselineNetCost - thisLegacyCost);
 
   // Break-even
-  const simpleBE = simpleBreakEven(fees, params.baselinePayment, pmt);
-  const trueBE =
+  const cashflowBE = simpleBreakEven(fees, params.baselinePayment, pmt);
+  const interestBE =
     params.baselineSchedule.length > 0
       ? trueBreakEven(params.baselineSchedule, schedule, fees, horizonMonths)
       : null;
@@ -181,10 +194,12 @@ function buildScenario(params: BuildParams): ScenarioResult {
     interestWithinHorizon: interestInHorizon,
     fees,
     remainingBalanceAtHorizon: remBalance,
-    totalCostWithinHorizon: totalCost,
-    savingsVsBaseline: savings,
-    simpleBreakEvenMonths: simpleBE,
-    trueBreakEvenMonths: trueBE,
+    paymentsWithinHorizon,
+    cashOutflowWithinHorizon,
+    netCostAtHorizon,
+    netSavingsAtHorizon,
+    cashflowBreakEvenMonths: cashflowBE,
+    interestBreakEvenMonths: interestBE,
     isBestLongTerm: false, // set by comparison engine
     warnings: [],
   };

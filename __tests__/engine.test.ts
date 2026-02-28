@@ -52,15 +52,16 @@ describe("Engine Integration Tests", () => {
       input({
         remainingBalance: 200_000,
         currentAnnualRate: 0.0625,
-        yearsRemaining: 20,
+        yearsRemaining: 15,  // Y=15 prevents 15yr scenario from appearing
         closingCosts: 4_000,
         refiRateSameTerm: 0.06, // only 0.25% drop
-        refiRate15yr: 0.055,
-        refiRate30yr: 0.0625, // same as current
+        refiRate15yr: 0.055,    // irrelevant — Y not > 15
+        refiRate30yr: 0.0625,   // same as current — won't appear
       })
     );
 
-    // With only 0.25% rate drop and $4k fees, likely yellow or red
+    // 0.25% rate drop, $4k fees, 15yr horizon:
+    // break-even ~130 months vs 180 total → ratio > 0.67 → red
     expect(["yellow", "red"]).toContain(result.verdict.color);
   });
 
@@ -195,7 +196,7 @@ describe("Engine Integration Tests", () => {
   // ================================================================
   // CASE 8: High fees scenario
   // ================================================================
-  it("Case 8: Very high closing costs ($20k) extend break-even", () => {
+  it("Case 8: Very high closing costs ($20k) extend break-even beyond 5yr horizon", () => {
     const result = runEngine(
       input({
         remainingBalance: 250_000,
@@ -205,16 +206,17 @@ describe("Engine Integration Tests", () => {
         refiRateSameTerm: 0.06,
         refiRate15yr: 0.055,
         refiRate30yr: 0.065,
+        horizonOverrideMonths: 60, // 5yr — break-even is ~96mo > 60mo → red
       })
     );
 
-    // High fees should push break-even out significantly
+    // High fees on 5yr horizon: break-even ratio near or above 0.67 → red
+    expect(result.verdict.color).toBe("red");
+    // Break-even ratio should be ≥ 0.67 of the 60mo horizon
     const winner = result.scenarios.find((s) => s.isBestLongTerm);
-    if (winner && winner.id !== "stay_current" && winner.simpleBreakEvenMonths !== null) {
-      expect(winner.simpleBreakEvenMonths).toBeGreaterThan(12);
+    if (winner && winner.id !== "stay_current" && winner.interestBreakEvenMonths !== null) {
+      expect(winner.interestBreakEvenMonths / 60).toBeGreaterThanOrEqual(0.67);
     }
-    // Verdict should not be green with such high fees
-    expect(["yellow", "red"]).toContain(result.verdict.color);
   });
 
   // ================================================================
@@ -281,9 +283,9 @@ describe("Engine Integration Tests", () => {
     const winner = result.scenarios.find((s) => s.isBestLongTerm);
     expect(winner).toBeDefined();
     if (winner && winner.id !== "stay_current") {
-      // With 0 fees, true break-even should be 0
-      // simpleBreakEven may be null if payment increases (e.g., 15yr winner)
-      expect(winner.trueBreakEvenMonths).toBe(0);
+      // With 0 fees, interest break-even should be 0
+      // cashflowBreakEvenMonths may be null if payment increases (e.g., 15yr winner)
+      expect(winner.interestBreakEvenMonths).toBe(0);
     }
     // Verdict break-even uses true break-even, which is 0 for $0 fees
     expect(result.verdict.breakEvenMonths).toBe(0);
@@ -365,9 +367,10 @@ describe("Engine Integration Tests", () => {
     expect(sc30.remainingBalanceAtHorizon).toBeGreaterThan(100_000);
     expect(sc30.remainingBalanceAtHorizon).toBeLessThan(200_000);
 
-    // Total cost should include only interest within 240-month horizon + fees
-    expect(sc30.totalCostWithinHorizon).toBe(
-      sc30.interestWithinHorizon + sc30.fees
+    // cashOutflowWithinHorizon = fees + paymentsWithinHorizon
+    expect(sc30.cashOutflowWithinHorizon).toBeCloseTo(
+      sc30.fees + sc30.paymentsWithinHorizon,
+      2
     );
 
     // Warning should be present
@@ -400,7 +403,7 @@ describe("Engine Integration Tests", () => {
     for (const s of result.scenarios) {
       expect(Number.isFinite(s.monthlyPayment)).toBe(true);
       expect(Number.isFinite(s.interestWithinHorizon)).toBe(true);
-      expect(Number.isFinite(s.totalCostWithinHorizon)).toBe(true);
+      expect(Number.isFinite(s.netCostAtHorizon)).toBe(true);
       expect(Number.isFinite(s.remainingBalanceAtHorizon)).toBe(true);
       expect(s.monthlyPayment).toBeGreaterThan(0);
     }
@@ -429,7 +432,7 @@ describe("Engine Invariants", () => {
     expect(baseline.fees).toBe(0);
     expect(baseline.remainingBalanceAtHorizon).toBe(0);
     expect(baseline.monthlyDelta).toBe(0);
-    expect(baseline.savingsVsBaseline).toBe(0);
+    expect(baseline.netSavingsAtHorizon).toBe(0);
   });
 
   it("exactly one scenario is marked as best", () => {
@@ -475,7 +478,7 @@ describe("Engine Invariants", () => {
     }
   });
 
-  it("totalCostWithinHorizon = interestWithinHorizon + fees for every scenario", () => {
+  it("netCostAtHorizon = cashOutflowWithinHorizon + remainingBalanceAtHorizon", () => {
     const result = runEngine(
       input({
         remainingBalance: 400_000,
@@ -486,11 +489,76 @@ describe("Engine Invariants", () => {
     );
 
     for (const s of result.scenarios) {
-      expect(s.totalCostWithinHorizon).toBeCloseTo(
-        s.interestWithinHorizon + s.fees,
+      expect(s.netCostAtHorizon).toBeCloseTo(
+        s.cashOutflowWithinHorizon + s.remainingBalanceAtHorizon,
+        2
+      );
+      expect(s.cashOutflowWithinHorizon).toBeCloseTo(
+        s.fees + s.paymentsWithinHorizon,
         2
       );
     }
+  });
+
+  it("horizonOverrideMonths wires through engine correctly", () => {
+    const result = runEngine(
+      input({
+        remainingBalance: 300_000,
+        currentAnnualRate: 0.075,
+        yearsRemaining: 25,
+        closingCosts: 6_000,
+        horizonOverrideMonths: 60,
+      })
+    );
+
+    expect(result.horizonMonths).toBe(60);
+
+    // All scenarios should have remainingBalance > 0 at 5yr horizon (none paid off yet)
+    for (const s of result.scenarios) {
+      expect(s.remainingBalanceAtHorizon).toBeGreaterThan(0);
+    }
+  });
+
+  it("verdict is RED when interest break-even exceeds horizon", () => {
+    // Very high fees relative to small rate drop → break-even > 3yr horizon
+    const result = runEngine(
+      input({
+        remainingBalance: 150_000,
+        currentAnnualRate: 0.065,
+        yearsRemaining: 20,
+        closingCosts: 15_000, // very high
+        refiRateSameTerm: 0.063, // tiny drop
+        refiRate15yr: 0.06,
+        refiRate30yr: 0.064,
+        horizonOverrideMonths: 36, // 3yr horizon
+      })
+    );
+
+    // With huge fees and tiny rate drop at 3yr horizon, should be red
+    expect(result.verdict.color).toBe("red");
+  });
+
+  it("savings threshold scales with horizon (GREEN at 10yr, not at 3yr)", () => {
+    // A scenario that barely qualifies for green at 10yr but not 3yr
+    // $300k loan, 0.5% rate drop, $5k fees — Y=15 to prevent 15yr from dominating
+    // 30yr rate higher than current so only same-term appears
+    const sharedParams = {
+      remainingBalance: 300_000,
+      currentAnnualRate: 0.07,
+      yearsRemaining: 15,   // prevents 15yr scenario
+      closingCosts: 5_000,
+      refiRateSameTerm: 0.065, // 0.5% drop
+      refiRate15yr: 0.06,      // irrelevant
+      refiRate30yr: 0.075,     // higher than current → won't appear
+    };
+
+    const result10yr = runEngine(input({ ...sharedParams, horizonOverrideMonths: 120 }));
+    const result3yr  = runEngine(input({ ...sharedParams, horizonOverrideMonths: 36 }));
+
+    // At 3yr: break-even ~60mo >> 36mo horizon (ratio > 1) → red
+    expect(result3yr.verdict.color).toBe("red");
+    // At 10yr: break-even ~60mo, ratio = 0.5 < 0.67 with $4.3k savings → yellow
+    expect(["yellow", "green"]).toContain(result10yr.verdict.color);
   });
 
   it("same-term and baseline have remainingBalance=0 at horizon", () => {

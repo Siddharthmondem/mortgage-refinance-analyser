@@ -31,6 +31,8 @@ export interface EngineInput extends LoanInput {
   refiRate15yr: number;
   /** Refi rate for 30-year scenario (decimal) */
   refiRate30yr: number;
+  /** Override the comparison horizon in months. Defaults to yearsRemaining × 12. */
+  horizonOverrideMonths?: number;
 }
 
 // ---- Amortization ----
@@ -55,10 +57,18 @@ export interface ScenarioResult {
   interestWithinHorizon: number; // total interest paid within comparison horizon
   fees: number; // closing costs (0 for baseline)
   remainingBalanceAtHorizon: number; // principal still owed at horizon end
-  totalCostWithinHorizon: number; // interest + fees within horizon
-  savingsVsBaseline: number; // positive = cheaper than baseline
-  simpleBreakEvenMonths: number | null;
-  trueBreakEvenMonths: number | null;
+  /** Total payments made within horizon: pmt × min(termMonths, N) */
+  paymentsWithinHorizon: number;
+  /** Cash paid out of pocket: fees + paymentsWithinHorizon */
+  cashOutflowWithinHorizon: number;
+  /** Total economic commitment at horizon exit: cashOutflowWithinHorizon + remainingBalanceAtHorizon */
+  netCostAtHorizon: number;
+  /** Positive = cheaper than baseline (vs baseline netCostAtHorizon) */
+  netSavingsAtHorizon: number;
+  /** Months to recoup via payment savings (null if payment increases) */
+  cashflowBreakEvenMonths: number | null;
+  /** Months to recoup via interest savings (preferred; null if not reachable within horizon) */
+  interestBreakEvenMonths: number | null;
   isBestLongTerm: boolean;
   warnings: string[];
 }

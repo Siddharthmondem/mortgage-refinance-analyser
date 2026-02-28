@@ -119,6 +119,7 @@ export default function AnalysisPopup({ lender, onClose }: Props) {
           <ScenarioTable
             scenarios={engineOutput.scenarios}
             horizonYears={horizonYears}
+            horizonMonths={engineOutput.horizonMonths}
           />
         </div>
 

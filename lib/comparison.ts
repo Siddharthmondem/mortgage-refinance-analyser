@@ -18,10 +18,10 @@ import { generateScenarios } from "./scenarios";
  * @returns EngineOutput with all scenarios and verdict
  */
 export function runEngine(input: EngineInput): EngineOutput {
-  const N = Math.round(input.yearsRemaining * 12);
+  const N = input.horizonOverrideMonths ?? Math.round(input.yearsRemaining * 12);
   const scenarios = generateScenarios(input);
 
-  // Rank by totalCostWithinHorizon ascending
+  // Rank by netCostAtHorizon ascending
   const ranked = rankScenarios(scenarios);
 
   // Select winner (best non-baseline, or baseline if nothing beats it)
@@ -33,8 +33,8 @@ export function runEngine(input: EngineInput): EngineOutput {
     s.isBestLongTerm = s.id === winner.id;
   }
 
-  // Generate verdict
-  const verdict = generateVerdict(winner, baseline);
+  // Generate verdict (pass horizonMonths for relative thresholds)
+  const verdict = generateVerdict(winner, baseline, N);
 
   return {
     input,
@@ -45,12 +45,12 @@ export function runEngine(input: EngineInput): EngineOutput {
 }
 
 /**
- * Rank scenarios by totalCostWithinHorizon ascending.
+ * Rank scenarios by netCostAtHorizon ascending.
  * Baseline is included but may not be rank 1 if a refi is cheaper.
  */
 export function rankScenarios(scenarios: ScenarioResult[]): ScenarioResult[] {
   return [...scenarios].sort(
-    (a, b) => a.totalCostWithinHorizon - b.totalCostWithinHorizon
+    (a, b) => a.netCostAtHorizon - b.netCostAtHorizon
   );
 }
 
@@ -58,7 +58,7 @@ export function rankScenarios(scenarios: ScenarioResult[]): ScenarioResult[] {
  * Select the winner scenario.
  *
  * Rules:
- * 1. Rank all scenarios by totalCostWithinHorizon ascending
+ * 1. Rank all scenarios by netCostAtHorizon ascending
  * 2. The winner is the cheapest scenario
  * 3. If the cheapest scenario IS the baseline, the winner is baseline
  *    → "Staying put is your best move"
@@ -91,15 +91,19 @@ export function selectWinner(
 /**
  * Generate the verdict object based on winner vs baseline.
  *
- * Thresholds:
- *   GREEN:  break-even < 24 months AND net savings > $2,000
- *   YELLOW: break-even 24–48 months OR net savings $500–$2,000
- *   RED:    break-even > 48 months OR net savings < $500 OR negative
+ * Thresholds are relative to horizonMonths:
+ *   GREEN:  break-even ratio < 0.33 AND savings > $200 × horizonYears
+ *   YELLOW: break-even ratio < 0.67 AND savings > $50 × horizonYears
+ *   RED:    break-even > horizon, ratio ≥ 0.67, or savings too low
  */
 export function generateVerdict(
   winner: ScenarioResult,
-  baseline: ScenarioResult
+  baseline: ScenarioResult,
+  horizonMonths: number
 ): Verdict {
+  // Suppress unused baseline param warning — kept for future use
+  void baseline;
+
   // If baseline is the winner, always red
   if (winner.id === "stay_current") {
     return {
@@ -114,15 +118,13 @@ export function generateVerdict(
     };
   }
 
-  // Use true break-even (month-by-month interest comparison) as primary.
-  // Fall back to simple break-even if true is unavailable.
-  // This correctly handles scenarios where monthly payment increases
-  // but total interest savings still recoup fees quickly (e.g., 15-year refi).
-  const breakEven = winner.trueBreakEvenMonths ?? winner.simpleBreakEvenMonths;
-  const netSavings = winner.savingsVsBaseline;
+  // Use interest break-even (month-by-month comparison) as primary.
+  // Fall back to cashflow break-even if interest is unavailable.
+  const breakEven = winner.interestBreakEvenMonths ?? winner.cashflowBreakEvenMonths;
+  const netSavings = winner.netSavingsAtHorizon;
   const monthlyDelta = winner.monthlyDelta;
 
-  const color = determineColor(breakEven, netSavings);
+  const color = determineColor(breakEven, netSavings, horizonMonths);
   const label = verdictLabel(color);
   const message = verdictMessage(color, winner, breakEven, netSavings);
 
@@ -139,23 +141,27 @@ export function generateVerdict(
 
 function determineColor(
   breakEven: number | null,
-  netSavings: number
+  netSavings: number,
+  horizonMonths: number
 ): VerdictColor {
-  // No monthly savings (break-even is null) or negative savings
+  const horizonYears = horizonMonths / 12;
+
+  // Negative savings or no break-even achievable
   if (breakEven === null || netSavings < 0) return "red";
 
-  // Green: break-even < 24 AND savings > $2,000
-  if (breakEven < 24 && netSavings > 2000) return "green";
+  // Break-even never occurs within the selected horizon
+  if (breakEven > horizonMonths) return "red";
 
-  // Yellow: break-even 24–48 OR savings $500–$2,000
-  if (
-    (breakEven >= 24 && breakEven <= 48) ||
-    (netSavings >= 500 && netSavings <= 2000)
-  ) {
-    return "yellow";
-  }
+  const ratio = breakEven / horizonMonths;
+  const greenSavingsThreshold = 200 * horizonYears; // $600 at 3yr, $2k at 10yr
+  const yellowSavingsThreshold = 50 * horizonYears;  // $150 at 3yr, $500 at 10yr
 
-  // Red: break-even > 48 OR savings < $500
+  // Green: recoup within first 1/3 of horizon AND meaningful savings
+  if (ratio < 0.33 && netSavings > greenSavingsThreshold) return "green";
+
+  // Yellow: recoup within first 2/3 of horizon AND some savings
+  if (ratio < 0.67 && netSavings > yellowSavingsThreshold) return "yellow";
+
   return "red";
 }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import InputForm, { type FormValues } from "@/components/InputForm";
 import VerdictBox from "@/components/VerdictBox";
 import KeyNumbers from "@/components/KeyNumbers";
 import ScenarioTable from "@/components/ScenarioTable";
+import HorizonSelector from "@/components/HorizonSelector";
 import AssumptionsDisclosure from "@/components/AssumptionsDisclosure";
 import RateAlertOptIn from "@/components/RateAlertOptIn";
 import LenderRateCards from "@/components/LenderRateCards";
@@ -148,6 +149,8 @@ function computeTriggerRate(form: FormValues): number {
 export default function HomeClient() {
   const [result, setResult] = useState<EngineOutput | null>(null);
   const [formValues, setFormValues] = useState<FormValues | null>(null);
+  const [currentRates, setCurrentRates] = useState<RateData>(STATIC_RATES);
+  const [horizonChoice, setHorizonChoice] = useState<number | null>(null);
   const [scoredLenders, setScoredLenders] = useState<ScoredLenderRate[]>([]);
   const [lendersLoading, setLendersLoading] = useState(false);
   const [lendersError, setLendersError] = useState(false);
@@ -156,13 +159,29 @@ export default function HomeClient() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const formRef    = useRef<HTMLDivElement>(null);
 
+  // Re-run engine whenever horizonChoice changes (after first submit)
+  const runEngineWithHorizon = useCallback(
+    (values: FormValues, rates: RateData, horizon: number | null) => {
+      const engineInput = buildEngineInputFromRates(values, rates);
+      if (horizon !== null) engineInput.horizonOverrideMonths = horizon;
+      return runEngine(engineInput);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!formValues) return;
+    setResult(runEngineWithHorizon(formValues, currentRates, horizonChoice));
+  }, [horizonChoice, formValues, currentRates, runEngineWithHorizon]);
+
   function handleSubmit(values: FormValues) {
     setFormValues(values);
+    setHorizonChoice(null); // reset horizon on new form submission
 
     // 1. Immediately show results using static rates (zero delay)
-    const staticInput = buildEngineInputFromRates(values, STATIC_RATES);
-    const output = runEngine(staticInput);
+    const output = runEngineWithHorizon(values, STATIC_RATES, null);
     setResult(output);
+    setCurrentRates(STATIC_RATES);
     setRateBreakdown(buildRateBreakdown(STATIC_RATES, values, "fallback"));
 
     setTimeout(() => {
@@ -189,14 +208,14 @@ export default function HomeClient() {
       // Update breakdown with live source metadata
       setRateBreakdown(buildRateBreakdown(liveRates, values, data.rateSource));
 
+      // Store live rates — the horizonChoice effect will re-run with them
       // Re-run engine only if rates actually changed
       if (
         liveRates.rates.fixed_30yr !== STATIC_RATES.rates.fixed_30yr ||
         liveRates.rates.fixed_15yr !== STATIC_RATES.rates.fixed_15yr
       ) {
-        const liveInput = buildEngineInputFromRates(values, liveRates);
-        const liveOutput = runEngine(liveInput);
-        setResult(liveOutput);
+        setCurrentRates(liveRates);
+        // Effect will fire due to currentRates change and re-run with current horizonChoice
       }
     } catch {
       // Static results already displayed — just log
@@ -252,10 +271,12 @@ export default function HomeClient() {
   }
 
   const horizonYears   = result ? Math.round(result.horizonMonths / 12) : 0;
+  const resultHorizonMonths = result ? result.horizonMonths : 0;
   const needsRateAlert = result && (result.verdict.color === "yellow" || result.verdict.color === "red");
   const triggerRate    = needsRateAlert && formValues ? computeTriggerRate(formValues) : 0;
   const currentRate    = formValues ? parseFloat(formValues.currentAnnualRate) / 100 : 0;
   const sc30           = result?.scenarios.find((s) => s.id === "refi_30yr");
+  const yearsRemaining = formValues ? parseFloat(formValues.yearsRemaining) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -322,22 +343,21 @@ export default function HomeClient() {
                 {/* 3 Key Numbers */}
                 <KeyNumbers verdict={result.verdict} horizonYears={horizonYears} />
 
-                {/* Term Reset Trap */}
-                {sc30 && sc30.remainingBalanceAtHorizon > 0 && (
+                {/* Term Reset Trap / Tradeoff — uses warning text from engine */}
+                {sc30 && sc30.remainingBalanceAtHorizon > 0 && sc30.warnings.length > 0 && (
                   <div
                     className="rounded-xl border border-amber-200 bg-amber-50 p-4"
                     role="alert"
-                    aria-label="Term Reset Trap warning"
+                    aria-label="Term reset warning"
                   >
                     <p className="font-semibold text-amber-800 text-sm mb-1">
-                      ⚠️ Term Reset Trap
+                      ⚠️ {horizonChoice === null ? "Term Reset Trap" : "Term Reset Tradeoff"}
                     </p>
                     <p className="text-sm text-amber-700">
-                      The 30-year option lowers your monthly payment, but you would still owe{" "}
-                      <strong>
-                        ${sc30.remainingBalanceAtHorizon.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                      </strong>{" "}
-                      when your original loan would have been paid off. You are trading lower payments now for years of extra payments later.
+                      {sc30.warnings.find((w) =>
+                        w.startsWith("Term Reset")
+                      )?.replace(/^Term Reset (Trap|Tradeoff): /, "") ??
+                        "The 30-year option extends your repayment timeline."}
                     </p>
                   </div>
                 )}
@@ -350,8 +370,19 @@ export default function HomeClient() {
                   />
                 )}
 
+                {/* Horizon Selector */}
+                <HorizonSelector
+                  value={horizonChoice}
+                  onChange={setHorizonChoice}
+                  yearsRemaining={yearsRemaining}
+                />
+
                 {/* Scenario Table */}
-                <ScenarioTable scenarios={result.scenarios} horizonYears={horizonYears} />
+                <ScenarioTable
+                  scenarios={result.scenarios}
+                  horizonYears={horizonYears}
+                  horizonMonths={resultHorizonMonths}
+                />
 
                 {/* Rate Source & Breakdown */}
                 {rateBreakdown && <RateSourceCard breakdown={rateBreakdown} />}

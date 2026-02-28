@@ -126,11 +126,11 @@ describe("scoreLenderRate", () => {
       lender,
       300_000,
       0.075,
-      25,
+      15, // Y=15: no 15yr scenario, only same-term (0.1% drop) — clearly not green
       5000
     );
 
-    // Should NOT be green — rate drop too small relative to fees
+    // 0.1% rate drop, $5k fees, 15yr horizon: break-even ~200mo > 180mo → red
     expect(["yellow", "red"]).toContain(scored.verdict.color);
   });
 
