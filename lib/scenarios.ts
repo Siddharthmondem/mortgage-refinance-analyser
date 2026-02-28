@@ -11,6 +11,7 @@ import {
   remainingBalanceAtMonth,
 } from "./amortization";
 import { simpleBreakEven, trueBreakEven } from "./breakeven";
+import { computeIRR } from "./irr";
 import type { EngineInput, ScenarioResult, AmortizationRow } from "./types";
 
 /**
@@ -127,6 +128,27 @@ export function generateScenarios(input: EngineInput): ScenarioResult[] {
     scenarios.push(sc30);
   }
 
+  // ---- Compute IRR for each non-baseline scenario ----
+  // Must be done after all scenarios are built so we have baseline.remainingBalanceAtHorizon.
+  const baselineBalAtHorizon = baseline.remainingBalanceAtHorizon;
+  const baselinePayment = baseline.monthlyPayment;
+
+  for (const sc of scenarios) {
+    if (sc.id === "stay_current") {
+      sc.irrAnnualized = null;
+      continue;
+    }
+    const balanceSaved = round2(baselineBalAtHorizon - sc.remainingBalanceAtHorizon);
+    sc.irrAnnualized = computeIRR(
+      sc.fees,
+      sc.monthlyPayment,   // refi monthly payment
+      baselinePayment,     // baseline monthly payment
+      sc.termMonths,       // refi loan term (may be < N for 15yr at long horizon)
+      balanceSaved,
+      N
+    );
+  }
+
   return scenarios;
 }
 
@@ -200,6 +222,7 @@ function buildScenario(params: BuildParams): ScenarioResult {
     netSavingsAtHorizon,
     cashflowBreakEvenMonths: cashflowBE,
     interestBreakEvenMonths: interestBE,
+    irrAnnualized: null, // populated by generateScenarios after all scenarios are built
     isBestLongTerm: false, // set by comparison engine
     warnings: [],
   };

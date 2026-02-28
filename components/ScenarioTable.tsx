@@ -25,6 +25,13 @@ function fmtDelta(n: number): string {
   return sign + "$" + abs.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function fmtIRR(irr: number | null): string {
+  if (irr === null) return "—";
+  if (!isFinite(irr)) return "∞";
+  const pct = (irr * 100).toFixed(1);
+  return irr >= 0 ? `+${pct}%` : `${pct}%`;
+}
+
 const SCENARIO_ORDER: Array<ScenarioResult["id"]> = [
   "stay_current",
   "refi_same_term",
@@ -219,6 +226,20 @@ export default function ScenarioTable({ scenarios, horizonYears, horizonMonths }
                       winners={ordered.map((s) => s.isBestLongTerm)}
                       highlight="min"
                       numbers={ordered.map((s) => s.cashOutflowWithinHorizon)}
+                      muted
+                    />
+
+                    {/* Annual return (IRR) */}
+                    <Row
+                      label="Annual Return (IRR)"
+                      values={ordered.map((s) => fmtIRR(s.irrAnnualized))}
+                      winners={ordered.map((s) => s.isBestLongTerm)}
+                      warn={ordered.map(
+                        (s) =>
+                          s.irrAnnualized !== null &&
+                          isFinite(s.irrAnnualized) &&
+                          s.irrAnnualized < 0
+                      )}
                       muted
                     />
 

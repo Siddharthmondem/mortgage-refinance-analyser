@@ -69,6 +69,13 @@ export interface ScenarioResult {
   cashflowBreakEvenMonths: number | null;
   /** Months to recoup via interest savings (preferred; null if not reachable within horizon) */
   interestBreakEvenMonths: number | null;
+  /**
+   * Annualized IRR of the closing-cost investment over the selected horizon.
+   * Infinity  — fees = 0 (no-cost refi, infinite return)
+   * null      — stay_current, or no mathematical solution found
+   * negative  — investment loses value (payment increase outweighs balance savings)
+   */
+  irrAnnualized: number | null;
   isBestLongTerm: boolean;
   warnings: string[];
 }
@@ -83,6 +90,8 @@ export interface Verdict {
   monthlyDelta: number;
   netSavings: number;
   bestScenarioId: ScenarioId;
+  /** Winner's annualized IRR. null for stay_current or if no solution found. */
+  irrAnnualized: number | null;
 }
 
 // ---- Full Engine Output ----

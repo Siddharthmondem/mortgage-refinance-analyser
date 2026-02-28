@@ -11,6 +11,13 @@ function fmt(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function fmtIRR(irr: number | null): string {
+  if (irr === null) return "N/A";
+  if (!isFinite(irr)) return "∞";
+  const pct = (irr * 100).toFixed(1);
+  return irr >= 0 ? `+${pct}%` : `${pct}%`;
+}
+
 interface CardProps {
   value: string;
   label: string;
@@ -78,8 +85,18 @@ export default function KeyNumbers({ verdict, horizonYears }: Props) {
       ? verdict.breakEvenMonths / horizonMonths
       : null;
 
+  const irrDisplay = fmtIRR(verdict.irrAnnualized);
+  const irrIsPositive =
+    verdict.irrAnnualized !== null &&
+    isFinite(verdict.irrAnnualized) &&
+    verdict.irrAnnualized > 0;
+  const irrIsNegative =
+    verdict.irrAnnualized !== null &&
+    isFinite(verdict.irrAnnualized) &&
+    verdict.irrAnnualized < 0;
+
   return (
-    <dl className="grid grid-cols-3 gap-2 sm:gap-3" aria-label="Key refinance numbers">
+    <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3" aria-label="Key refinance numbers">
       <Card
         value={breakEvenDisplay}
         label="break-even"
@@ -102,6 +119,13 @@ export default function KeyNumbers({ verdict, horizonYears }: Props) {
         sub="total cost difference"
         accent={verdict.netSavings > greenSavingsThreshold}
         warn={verdict.netSavings < 0}
+      />
+      <Card
+        value={irrDisplay}
+        label="annual return"
+        sub="on closing costs"
+        accent={irrIsPositive && verdict.irrAnnualized! > 0.10}
+        warn={irrIsNegative}
       />
     </dl>
   );

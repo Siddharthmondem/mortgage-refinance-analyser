@@ -115,6 +115,7 @@ export function generateVerdict(
       monthlyDelta: 0,
       netSavings: 0,
       bestScenarioId: "stay_current",
+      irrAnnualized: null,
     };
   }
 
@@ -136,6 +137,7 @@ export function generateVerdict(
     monthlyDelta,
     netSavings,
     bestScenarioId: winner.id,
+    irrAnnualized: winner.irrAnnualized,
   };
 }
 

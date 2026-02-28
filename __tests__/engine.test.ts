@@ -580,3 +580,142 @@ describe("Engine Invariants", () => {
     }
   });
 });
+
+// ================================================================
+// IRR Integration Tests
+// ================================================================
+describe("IRR — ScenarioResult and Verdict", () => {
+  it("stay_current always has irrAnnualized = null", () => {
+    const result = runEngine(
+      input({
+        remainingBalance: 300_000,
+        currentAnnualRate: 0.075,
+        yearsRemaining: 25,
+        closingCosts: 6_000,
+      })
+    );
+
+    const baseline = result.scenarios.find((s) => s.id === "stay_current")!;
+    expect(baseline.irrAnnualized).toBeNull();
+  });
+
+  it("winner's irrAnnualized propagates to verdict", () => {
+    const result = runEngine(
+      input({
+        remainingBalance: 300_000,
+        currentAnnualRate: 0.075,
+        yearsRemaining: 25,
+        closingCosts: 6_000,
+        refiRateSameTerm: 0.0575,
+        refiRate15yr: 0.0525,
+        refiRate30yr: 0.06,
+      })
+    );
+
+    const winner = result.scenarios.find((s) => s.isBestLongTerm)!;
+    expect(result.verdict.irrAnnualized).toBe(winner.irrAnnualized);
+  });
+
+  it("stay_current verdict has irrAnnualized = null", () => {
+    const result = runEngine(
+      input({
+        remainingBalance: 250_000,
+        currentAnnualRate: 0.05,  // already low — no refi will beat it
+        yearsRemaining: 22,
+        closingCosts: 5_000,
+        refiRateSameTerm: 0.055, // higher
+        refiRate15yr: 0.05,      // same
+        refiRate30yr: 0.06,      // higher
+      })
+    );
+
+    expect(result.verdict.bestScenarioId).toBe("stay_current");
+    expect(result.verdict.irrAnnualized).toBeNull();
+  });
+
+  it("zero closing costs → irrAnnualized = Infinity for winner", () => {
+    const result = runEngine(
+      input({
+        remainingBalance: 200_000,
+        currentAnnualRate: 0.07,
+        yearsRemaining: 20,
+        closingCosts: 0,
+        refiRateSameTerm: 0.06,
+        refiRate15yr: 0.055,
+        refiRate30yr: 0.065,
+      })
+    );
+
+    const winner = result.scenarios.find((s) => s.isBestLongTerm)!;
+    expect(winner.id).not.toBe("stay_current");
+    expect(winner.irrAnnualized).toBe(Infinity);
+    expect(result.verdict.irrAnnualized).toBe(Infinity);
+  });
+
+  it("refi scenarios have a numeric irrAnnualized (not null) on clear win", () => {
+    // Big rate drop → clear green, positive IRR
+    const result = runEngine(
+      input({
+        remainingBalance: 300_000,
+        currentAnnualRate: 0.075,
+        yearsRemaining: 25,
+        closingCosts: 6_000,
+        refiRateSameTerm: 0.0575,
+        refiRate15yr: 0.0525,
+        refiRate30yr: 0.06,
+      })
+    );
+
+    const refiScenarios = result.scenarios.filter((s) => s.id !== "stay_current");
+    for (const sc of refiScenarios) {
+      expect(sc.irrAnnualized).not.toBeNull();
+      expect(Number.isFinite(sc.irrAnnualized!)).toBe(true);
+    }
+  });
+
+  it("winner IRR is positive on a clear green verdict", () => {
+    const result = runEngine(
+      input({
+        remainingBalance: 300_000,
+        currentAnnualRate: 0.075,
+        yearsRemaining: 25,
+        closingCosts: 6_000,
+        refiRateSameTerm: 0.0575,
+        refiRate15yr: 0.0525,
+        refiRate30yr: 0.06,
+      })
+    );
+
+    expect(result.verdict.color).toBe("green");
+    expect(result.verdict.irrAnnualized).not.toBeNull();
+    expect(result.verdict.irrAnnualized!).toBeGreaterThan(0);
+  });
+
+  it("15yr refi irrAnnualized can be positive even with higher monthly payment", () => {
+    // Y=28, big rate drop — 15yr has higher payment but dramatically lower balance at horizon
+    const result = runEngine(
+      input({
+        remainingBalance: 400_000,
+        currentAnnualRate: 0.07,
+        yearsRemaining: 28,
+        closingCosts: 8_000,
+        refiRateSameTerm: 0.055,
+        refiRate15yr: 0.0475,
+        refiRate30yr: 0.0575,
+        horizonOverrideMonths: 60, // 5yr: 15yr has higher payments BUT lower balance
+      })
+    );
+
+    const sc15 = result.scenarios.find((s) => s.id === "refi_15yr");
+    if (sc15) {
+      // 15yr has higher monthly payment than baseline
+      expect(sc15.monthlyDelta).toBeGreaterThan(0);
+      // But balance at horizon is dramatically lower (big equity build-up)
+      const baseline = result.scenarios.find((s) => s.id === "stay_current")!;
+      expect(baseline.remainingBalanceAtHorizon).toBeGreaterThan(sc15.remainingBalanceAtHorizon);
+      // IRR should be positive because balance savings outweigh payment increases
+      expect(sc15.irrAnnualized).not.toBeNull();
+      expect(sc15.irrAnnualized!).toBeGreaterThan(0);
+    }
+  });
+});
