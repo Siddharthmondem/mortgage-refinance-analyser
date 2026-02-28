@@ -41,7 +41,7 @@ function Card({ value, label, sub, accent, warn }: CardProps) {
         {label}
       </dt>
       <dd
-        className={`text-base sm:text-2xl font-bold leading-tight break-words mt-0.5 ${
+        className={`text-base sm:text-2xl font-bold leading-tight mt-0.5 ${
           accent ? "text-blue-700" : warn ? "text-amber-700" : "text-gray-900"
         }`}
       >
