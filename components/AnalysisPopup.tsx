@@ -87,7 +87,7 @@ export default function AnalysisPopup({ lender, onClose }: Props) {
         className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-start justify-between rounded-t-2xl">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3 flex items-start justify-between rounded-t-2xl">
           <div>
             <h2 className="font-bold text-gray-900 text-lg">
               {lender.lenderName}
@@ -108,9 +108,9 @@ export default function AnalysisPopup({ lender, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-5 py-4 space-y-3">
           {/* Verdict */}
-          <VerdictBox verdict={verdict} showRecommendation />
+          <VerdictBox verdict={verdict} showRecommendation compact />
 
           {/* Key Numbers */}
           <KeyNumbers verdict={verdict} horizonYears={horizonYears} />
@@ -124,7 +124,7 @@ export default function AnalysisPopup({ lender, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 rounded-b-2xl">
+        <div className="sticky bottom-0 bg-white border-t border-gray-100 px-5 py-3 rounded-b-2xl">
           <button
             onClick={onClose}
             className="text-sm text-blue-600 hover:text-blue-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"

@@ -13,6 +13,8 @@ interface Props {
   verdict: Verdict;
   /** When true, appends the recommended scenario name to the verdict label */
   showRecommendation?: boolean;
+  /** When true, reduces padding and hides the message paragraph (for modal/popup contexts) */
+  compact?: boolean;
 }
 
 const CONFIG = {
@@ -42,19 +44,19 @@ const CONFIG = {
   },
 } as const;
 
-export default function VerdictBox({ verdict, showRecommendation }: Props) {
+export default function VerdictBox({ verdict, showRecommendation, compact }: Props) {
   const cfg = CONFIG[verdict.color];
   const scenarioLabel = SCENARIO_LABELS[verdict.bestScenarioId];
   const showScenario = showRecommendation && scenarioLabel;
 
   return (
     <div
-      className={`rounded-xl border-2 ${cfg.bg} ${cfg.border} p-6`}
+      className={`rounded-xl border-2 ${cfg.bg} ${cfg.border} ${compact ? "p-4" : "p-6"}`}
       role="region"
       aria-label="Refinance verdict"
     >
       {/* Header */}
-      <div className="flex items-start gap-3 mb-3">
+      <div className={`flex items-start gap-3 ${compact ? "" : "mb-3"}`}>
         <span className="text-2xl flex-shrink-0" role="img" aria-label={cfg.iconLabel}>
           {cfg.icon}
         </span>
@@ -70,10 +72,12 @@ export default function VerdictBox({ verdict, showRecommendation }: Props) {
         </div>
       </div>
 
-      {/* Message */}
-      <p className={`text-sm leading-relaxed ${cfg.messageColor}`}>
-        {verdict.message}
-      </p>
+      {/* Message — hidden in compact mode; numbers tell the story */}
+      {!compact && (
+        <p className={`text-sm leading-relaxed ${cfg.messageColor}`}>
+          {verdict.message}
+        </p>
+      )}
     </div>
   );
 }
