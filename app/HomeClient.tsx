@@ -9,12 +9,22 @@ import AssumptionsDisclosure from "@/components/AssumptionsDisclosure";
 import RateAlertOptIn from "@/components/RateAlertOptIn";
 import LenderRateCards from "@/components/LenderRateCards";
 import AnalysisPopup from "@/components/AnalysisPopup";
+import RateSourceCard from "@/components/RateSourceCard";
 import { runEngine } from "@/lib/comparison";
 import { scoreLenderRate, sortScoredRates } from "@/lib/lender-rates";
-import type { EngineInput, EngineOutput, RateData, LenderRate, ScoredLenderRate } from "@/lib/types";
+import type {
+  EngineInput,
+  EngineOutput,
+  RateData,
+  RateSource,
+  RateBreakdown,
+  MarketRatesResponse,
+  LenderRate,
+  ScoredLenderRate,
+} from "@/lib/types";
 
 import ratesJson from "@/data/rates.json";
-const RATES = ratesJson as RateData;
+const STATIC_RATES = ratesJson as RateData;
 
 const CREDIT_SPREADS: Record<string, { spread30: number; spread15: number }> = {
   excellent: { spread30: 0.000,  spread15: 0.000 },
@@ -28,14 +38,15 @@ function interpolateRate(termYears: number, rate15: number, rate30: number): num
   return rate15 + (rate30 - rate15) * (termYears - 15) / 15;
 }
 
-function buildEngineInput(form: FormValues): EngineInput {
+/** Build engine input using provided rate data (not the static import). */
+function buildEngineInputFromRates(form: FormValues, rates: RateData): EngineInput {
   const balance  = parseFloat(form.remainingBalance.replace(/[$,]/g, ""));
   const rate     = parseFloat(form.currentAnnualRate.replace(/%/g, "")) / 100;
   const years    = parseFloat(form.yearsRemaining);
   const costs    = parseFloat(form.closingCosts.replace(/[$,]/g, ""));
   const spread   = CREDIT_SPREADS[form.creditTier] ?? CREDIT_SPREADS["excellent"]!;
-  const rate30   = RATES.rates.fixed_30yr / 100;
-  const rate15   = RATES.rates.fixed_15yr / 100;
+  const rate30   = rates.rates.fixed_30yr / 100;
+  const rate15   = rates.rates.fixed_15yr / 100;
 
   let refiRateSameTerm: number;
   let refiRate15yr: number;
@@ -58,6 +69,49 @@ function buildEngineInput(form: FormValues): EngineInput {
     refiRateSameTerm,
     refiRate15yr,
     refiRate30yr,
+  };
+}
+
+/** Build a transparent rate breakdown for the UI. */
+function buildRateBreakdown(
+  rates: RateData,
+  form: FormValues,
+  source: RateSource
+): RateBreakdown {
+  const spread = CREDIT_SPREADS[form.creditTier] ?? CREDIT_SPREADS["excellent"]!;
+  const rate30 = rates.rates.fixed_30yr / 100;
+  const rate15 = rates.rates.fixed_15yr / 100;
+  const years  = parseFloat(form.yearsRemaining);
+  const usingQuoted = form.quotedRate.trim() !== "";
+
+  if (usingQuoted) {
+    const quoted = parseFloat(form.quotedRate.replace(/%/g, "")) / 100;
+    return {
+      rateSource: source,
+      baseRate30yr: rates.rates.fixed_30yr,
+      baseRate15yr: rates.rates.fixed_15yr,
+      fetchedAt: rates.fetched_at,
+      creditSpread30: spread.spread30,
+      creditSpread15: spread.spread15,
+      finalRateSameTerm: quoted,
+      finalRate15yr: quoted,
+      finalRate30yr: quoted,
+      usingQuotedRate: true,
+      quotedRate: quoted,
+    };
+  }
+
+  return {
+    rateSource: source,
+    baseRate30yr: rates.rates.fixed_30yr,
+    baseRate15yr: rates.rates.fixed_15yr,
+    fetchedAt: rates.fetched_at,
+    creditSpread30: spread.spread30,
+    creditSpread15: spread.spread15,
+    finalRateSameTerm: interpolateRate(years, rate15, rate30) + spread.spread30,
+    finalRate15yr: rate15 + spread.spread15,
+    finalRate30yr: rate30 + spread.spread30,
+    usingQuotedRate: false,
   };
 }
 
@@ -98,19 +152,56 @@ export default function HomeClient() {
   const [lendersLoading, setLendersLoading] = useState(false);
   const [lendersError, setLendersError] = useState(false);
   const [selectedLender, setSelectedLender] = useState<ScoredLenderRate | null>(null);
+  const [rateBreakdown, setRateBreakdown] = useState<RateBreakdown | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const formRef    = useRef<HTMLDivElement>(null);
 
   function handleSubmit(values: FormValues) {
     setFormValues(values);
-    const output = runEngine(buildEngineInput(values));
+
+    // 1. Immediately show results using static rates (zero delay)
+    const staticInput = buildEngineInputFromRates(values, STATIC_RATES);
+    const output = runEngine(staticInput);
     setResult(output);
+    setRateBreakdown(buildRateBreakdown(STATIC_RATES, values, "fallback"));
+
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
 
-    // Fetch lender rates in parallel
+    // 2. In parallel: fetch live market rates + lender rates
+    fetchLiveRatesAndUpdate(values);
     fetchAndScoreLenders(values);
+  }
+
+  /** Fetch live PMMS rates; if they differ from static, re-run the engine. */
+  async function fetchLiveRatesAndUpdate(values: FormValues) {
+    try {
+      const res = await fetch("/api/market-rates");
+      if (!res.ok) {
+        console.warn(`Market rates API: ${res.status}`);
+        return;
+      }
+
+      const data = await res.json() as MarketRatesResponse;
+      const liveRates = data.rates;
+
+      // Update breakdown with live source metadata
+      setRateBreakdown(buildRateBreakdown(liveRates, values, data.rateSource));
+
+      // Re-run engine only if rates actually changed
+      if (
+        liveRates.rates.fixed_30yr !== STATIC_RATES.rates.fixed_30yr ||
+        liveRates.rates.fixed_15yr !== STATIC_RATES.rates.fixed_15yr
+      ) {
+        const liveInput = buildEngineInputFromRates(values, liveRates);
+        const liveOutput = runEngine(liveInput);
+        setResult(liveOutput);
+      }
+    } catch {
+      // Static results already displayed — just log
+      console.warn("Live market rate fetch failed; using static rates.");
+    }
   }
 
   async function fetchAndScoreLenders(values: FormValues) {
@@ -212,7 +303,7 @@ export default function HomeClient() {
                   Your Loan Details
                 </h2>
                 <InputForm
-                  rates={RATES}
+                  rates={STATIC_RATES}
                   onSubmit={handleSubmit}
                   initialValues={formValues ?? undefined}
                 />
@@ -262,6 +353,9 @@ export default function HomeClient() {
                 {/* Scenario Table */}
                 <ScenarioTable scenarios={result.scenarios} horizonYears={horizonYears} />
 
+                {/* Rate Source & Breakdown */}
+                {rateBreakdown && <RateSourceCard breakdown={rateBreakdown} />}
+
                 {/* Lender Rate Cards */}
                 <LenderRateCards
                   rates={scoredLenders}
@@ -282,7 +376,7 @@ export default function HomeClient() {
                 </div>
 
                 {/* Assumptions */}
-                <AssumptionsDisclosure rates={RATES} />
+                <AssumptionsDisclosure rates={STATIC_RATES} breakdown={rateBreakdown} />
               </div>
             ) : (
               /* Empty state — show assumptions before results */
@@ -320,7 +414,7 @@ export default function HomeClient() {
                   </div>
                 </div>
 
-                <AssumptionsDisclosure rates={RATES} />
+                <AssumptionsDisclosure rates={STATIC_RATES} />
               </div>
             )}
           </div>

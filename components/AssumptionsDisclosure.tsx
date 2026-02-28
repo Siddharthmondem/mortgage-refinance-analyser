@@ -1,20 +1,39 @@
-import type { RateData } from "@/lib/types";
+import type { RateData, RateBreakdown } from "@/lib/types";
+
+const SOURCE_LABEL: Record<string, string> = {
+  live: "live",
+  cached: "cached",
+  fallback: "stored",
+};
 
 interface Props {
   rates: RateData;
+  breakdown?: RateBreakdown | null;
 }
 
-export default function AssumptionsDisclosure({ rates }: Props) {
-  const rateDate = new Date(rates.fetched_at).toLocaleDateString("en-US", {
-    month: "long", day: "numeric", year: "numeric",
+export default function AssumptionsDisclosure({ rates, breakdown }: Props) {
+  const rateDate = new Date(
+    breakdown?.fetchedAt ?? rates.fetched_at
+  ).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   });
+
+  const sourceTag = breakdown
+    ? ` (${SOURCE_LABEL[breakdown.rateSource] ?? breakdown.rateSource})`
+    : "";
+
+  const rateValues = breakdown
+    ? ` — 30yr ${breakdown.baseRate30yr}%, 15yr ${breakdown.baseRate15yr}%`
+    : "";
 
   return (
     <div className="text-xs text-gray-500 space-y-1.5 border-t border-gray-200 pt-4 mt-4">
       <p className="font-semibold text-gray-600">Assumptions & Limitations</p>
       <ul className="space-y-1 list-disc list-inside">
         <li>
-          Rates are national averages from Freddie Mac PMMS (last updated {rateDate})
+          Rates from Freddie Mac PMMS{sourceTag}, updated {rateDate}{rateValues}
         </li>
         <li>Fixed-rate loans only. ARMs, HELOCs, and cash-out refinance not included.</li>
         <li>

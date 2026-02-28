@@ -116,3 +116,30 @@ export interface ScoredLenderRate extends LenderRate {
   totalSavings: number;
   engineOutput: EngineOutput;
 }
+
+// ---- Market Rate Provenance (Phase 2.5) ----
+
+/** How rates were obtained */
+export type RateSource = "live" | "cached" | "fallback";
+
+/** Response from /api/market-rates */
+export interface MarketRatesResponse {
+  rates: RateData;
+  rateSource: RateSource;
+  ageDescription: string; // e.g., "Updated 2 hours ago"
+}
+
+/** Transparent rate breakdown shown in results UI */
+export interface RateBreakdown {
+  rateSource: RateSource;
+  baseRate30yr: number; // percentage, e.g. 5.98
+  baseRate15yr: number; // percentage, e.g. 5.44
+  fetchedAt: string; // ISO 8601 timestamp
+  creditSpread30: number; // decimal, e.g. 0.005
+  creditSpread15: number; // decimal, e.g. 0.004
+  finalRateSameTerm: number; // decimal, e.g. 0.0623
+  finalRate15yr: number; // decimal
+  finalRate30yr: number; // decimal
+  usingQuotedRate: boolean;
+  quotedRate?: number; // decimal, only if user provided a quoted rate
+}

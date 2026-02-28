@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { generateSyntheticRates } from "@/lib/lender-rates";
-import type { CreditTier, LenderRate } from "@/lib/types";
+import { getLatestRates } from "@/lib/pmms";
+import type { CreditTier, LenderRate, RateData } from "@/lib/types";
 
 import ratesJson from "@/data/rates.json";
+const FALLBACK = ratesJson as RateData;
 
 // ---- Simple in-memory cache (1 hour) ----
 const cache = new Map<string, { data: LenderRate[]; timestamp: number }>();
@@ -61,10 +63,11 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  // Fallback: synthetic rates from PMMS
+  // Fallback: synthetic rates from PMMS (live or static)
+  const { rates: pmms } = await getLatestRates(FALLBACK);
   const rates = generateSyntheticRates(
-    ratesJson.rates.fixed_30yr,
-    ratesJson.rates.fixed_15yr,
+    pmms.rates.fixed_30yr,
+    pmms.rates.fixed_15yr,
     creditTier,
     loanAmount
   );
