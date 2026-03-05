@@ -1,8 +1,8 @@
 {
   "source": "freddie_mac_pmms",
-  "fetched_at": "2026-02-26T21:47:47.045Z",
+  "fetched_at": "2026-03-05T21:53:08.430Z",
   "rates": {
-    "fixed_30yr": 5.98,
-    "fixed_15yr": 5.44
+    "fixed_30yr": 6,
+    "fixed_15yr": 5.43
   }
 }
